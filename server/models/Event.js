@@ -13,7 +13,11 @@ const eventSchema = new mongoose.Schema(
     description: String,
     significance: String,
     poster: String,
-    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "cancelled"],
+      default: "pending",
+    },
     contributor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     saves: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
