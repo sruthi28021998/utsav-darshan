@@ -7,13 +7,19 @@ export default function Admin() {
   const [status, setStatus] = useState("pending");
   const [reports, setReports] = useState([]);
   const [cats, setCats] = useState([]);
+  const [activity, setActivity] = useState([]);
   const [newCat, setNewCat] = useState("");
+  const [err, setErr] = useState("");
 
   const load = async () => {
-    setStats((await api.get("/admin/stats")).data);
-    setEvents((await api.get("/admin/events", { params: { status } })).data);
-    setReports((await api.get("/admin/reports")).data);
-    setCats((await api.get("/categories")).data);
+    try {
+      setStats((await api.get("/admin/stats")).data);
+      setEvents((await api.get("/admin/events", { params: { status } })).data);
+      setReports((await api.get("/admin/reports")).data);
+      setCats((await api.get("/categories")).data);
+      setActivity((await api.get("/admin/activity")).data);
+      setErr("");
+    } catch { setErr("Couldn't load admin data."); }
   };
   useEffect(() => { load(); }, [status]);
 
@@ -24,14 +30,24 @@ export default function Admin() {
     if (name) { await api.put(`/admin/events/${e._id}`, { name }); load(); }
   };
   const resolve = async (id) => { await api.patch(`/admin/reports/${id}/resolve`); load(); };
-  const addCat = async () => { if (newCat) { await api.post("/categories", { name: newCat }); setNewCat(""); load(); } };
+  const addCat = async () => {
+    if (!newCat) return;
+    try { await api.post("/categories", { name: newCat }); setNewCat(""); load(); }
+    catch (e) { alert(e.response?.data?.message || "Couldn't add category"); }
+  };
   const delCat = async (id) => { await api.delete(`/categories/${id}`); load(); };
+
+  const cards = stats && [
+    ["Live events", stats.events], ["Pending", stats.pending], ["Users", stats.users],
+    ["Open reports", stats.reports], ["Total views", stats.views], ["Total saves", stats.saves],
+  ];
 
   return (
     <div className="space-y-6">
+      {err && <p className="text-red-600">{err}</p>}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[["Live events", stats.events], ["Pending", stats.pending], ["Users", stats.users], ["Open reports", stats.reports]].map(([k, v]) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {cards.map(([k, v]) => (
             <div key={k} className="bg-white p-4 rounded shadow text-center">
               <div className="text-2xl font-bold">{v}</div><div className="text-sm text-gray-500">{k}</div>
             </div>
@@ -43,14 +59,17 @@ export default function Admin() {
         <div className="flex gap-2 mb-3 items-center">
           <h2 className="font-bold">Events</h2>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="border rounded px-2">
-            <option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
+            <option value="pending">Pending</option><option value="approved">Approved</option>
+            <option value="rejected">Rejected</option><option value="cancelled">Cancelled</option>
           </select>
         </div>
+        {events.length === 0 && <p className="text-sm text-gray-500">No events in this list.</p>}
         {events.map((e) => (
           <div key={e._id} className="border-b py-2 flex flex-wrap gap-2 items-center text-sm">
             <span className="flex-1">{e.name} – {e.city} <i className="text-gray-500">by {e.contributor?.name}</i></span>
             <button onClick={() => setSt(e._id, "approved")} className="text-green-700">Approve</button>
             <button onClick={() => setSt(e._id, "rejected")} className="text-orange-700">Reject</button>
+            <button onClick={() => setSt(e._id, "cancelled")} className="text-gray-700">Cancel</button>
             <button onClick={() => edit(e)} className="text-blue-700">Edit</button>
             <button onClick={() => del(e._id)} className="text-red-700">Delete</button>
           </div>
@@ -59,6 +78,7 @@ export default function Admin() {
 
       <section className="bg-white p-4 rounded shadow">
         <h2 className="font-bold mb-2">Abuse / Misinformation Reports</h2>
+        {reports.length === 0 && <p className="text-sm text-gray-500">No open reports.</p>}
         {reports.map((r) => (
           <div key={r._id} className="border-b py-2 text-sm flex justify-between">
             <span>{r.event?.name} ({r.event?.city}): {r.reason}</span>
@@ -82,11 +102,26 @@ export default function Admin() {
         </div>
       </section>
 
-      {stats?.perCity?.length > 0 && (
-        <section className="bg-white p-4 rounded shadow">
-          <h2 className="font-bold mb-2">Events per City</h2>
-          {stats.perCity.map((c) => <div key={c._id} className="text-sm">{c._id}: {c.count}</div>)}
-        </section>
+      {stats && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <section className="bg-white p-4 rounded shadow">
+            <h2 className="font-bold mb-2">Events per City</h2>
+            {stats.perCity.map((c) => <div key={c._id} className="text-sm">{c._id}: {c.count}</div>)}
+            <h2 className="font-bold mt-4 mb-2">Top viewed events</h2>
+            {stats.top.map((t) => <div key={t._id} className="text-sm">{t.name} ({t.city}): {t.views} views, {t.saves} saves</div>)}
+          </section>
+          <section className="bg-white p-4 rounded shadow">
+            <h2 className="font-bold mb-2">Recent activity</h2>
+            {activity.length === 0 && <p className="text-sm text-gray-500">No activity yet.</p>}
+            {activity.map((a) => (
+              <div key={a._id} className="text-xs border-b py-1">
+                <b>{a.action.replaceAll("_", " ")}</b> {a.event?.name || a.meta || ""}
+                {a.user?.name && <> by {a.user.name}</>}
+                <span className="text-gray-400"> · {new Date(a.createdAt).toLocaleString()}</span>
+              </div>
+            ))}
+          </section>
+        </div>
       )}
     </div>
   );

@@ -1,22 +1,29 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import api from "../api";
+import { useParams, Link } from "react-router-dom";
+import api, { assetUrl } from "../api";
 
 export default function EventDetail() {
   const { id } = useParams();
   const [ev, setEv] = useState(null);
   const [saves, setSaves] = useState(0);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.get(`/events/${id}`).then((r) => { setEv(r.data); setSaves(r.data.saves); });
+    api.get(`/events/${id}`)
+      .then((r) => { setEv(r.data); setSaves(r.data.saves); })
+      .catch((e) => setErr(e.response?.status === 404 ? "This event isn't available." : "Couldn't load the event."));
   }, [id]);
 
-  if (!ev) return <p>Loading...</p>;
+  if (err) return <p className="text-red-600">{err} <Link to="/" className="underline">Back to events</Link></p>;
+  if (!ev) return <p className="text-gray-500">Loading...</p>;
 
+  const cancelled = ev.status === "cancelled";
   const save = async () => setSaves((await api.post(`/events/${id}/save`)).data.saves);
   const report = async () => {
     const reason = prompt("Reason for reporting?");
-    if (reason) { await api.post("/reports", { event: id, reason }); alert("Report submitted"); }
+    if (!reason) return;
+    try { await api.post("/reports", { event: id, reason }); alert("Report submitted"); }
+    catch (e) { alert(e.response?.data?.message || "Couldn't submit report"); }
   };
   const share = () => navigator.clipboard.writeText(window.location.href).then(() => alert("Link copied"));
 
@@ -26,7 +33,8 @@ export default function EventDetail() {
 
   return (
     <div className="bg-white rounded-lg shadow p-4">
-      {ev.poster && <img src={ev.poster} alt={ev.name} className="w-full max-h-80 object-cover rounded mb-3" />}
+      {cancelled && <div className="bg-red-50 text-red-700 p-3 rounded mb-3">This event has been cancelled by the organizer.</div>}
+      {ev.poster && <img src={assetUrl(ev.poster)} alt={ev.name} className="w-full max-h-80 object-cover rounded mb-3" />}
       <h1 className="text-2xl font-bold">{ev.name}</h1>
       <p className="text-gray-600">{ev.category} • {ev.city}{ev.state && `, ${ev.state}`}</p>
       <p className="text-sm">{new Date(ev.startDate).toDateString()} – {new Date(ev.endDate).toDateString()}</p>

@@ -24,6 +24,7 @@ export default function App() {
             path="/admin"
             element={user?.role === "admin" ? <Admin /> : <Navigate to="/login" />}
           />
+          <Route path="*" element={<p className="text-center mt-10">Page not found.</p>} />
         </Routes>
       </main>
     </div>
